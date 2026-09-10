@@ -44,12 +44,16 @@ jobs:
       - name: 无签名编译 .app（xcodebuild）
         run: |
           set -e
+          # 创建 Tauri mobile 模块所需的 server-addr 文件（否则 panic）
+          echo "http://localhost:1420" > "$TMPDIR/com.frapi.agent-app-server-addr"
           PROJ=$(find agent-app/src-tauri/gen/apple -maxdepth 1 -name "*.xcodeproj" | head -1)
           echo "Xcode 工程: $PROJ"
           cd agent-app/src-tauri/gen/apple
-          # 列出所有可用 scheme，取第一个
+          # 列出所有可用 scheme 和配置（调试用）
+          xcodebuild -project "$(basename "$PROJ")" -list
+          # 自动检测 scheme
           SCHEMES=$(xcodebuild -project "$(basename "$PROJ")" -list 2>&1 | sed -n '/Schemes:/,$p' | tail -n +2 | sed '/^$/d' | head -1 | xargs)
-          echo "可用 Scheme: $SCHEMES"
+          echo "使用 Scheme: $SCHEMES"
           xcodebuild \
             -project "$(basename "$PROJ")" \
             -scheme "$SCHEMES" \
@@ -65,7 +69,8 @@ jobs:
       - name: ldid 伪签名并打包 IPA
         run: |
           set -e
-          APP=$(find agent-app/src-tauri/gen/apple/build -name "*.app" -path "*Release-iphoneos*" | head -1)
+          # 同时搜索 Release 和 Debug 路径
+          APP=$(find agent-app/src-tauri/gen/apple/build -name "*.app" -path "*iphoneos*" | head -1)
           echo "产物 .app: $APP"
           APPNAME=$(basename "$APP" .app)
           EXEC=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP/Info.plist")
