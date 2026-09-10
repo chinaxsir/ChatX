@@ -1,0 +1,81 @@
+name: Build All Platforms
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-ios-trollstore:
+    name: 构建 iOS 巨魔 TrollStore IPA
+    runs-on: macos-14
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装 Rust iOS target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: 安装系统依赖（ldid 伪签名 / CocoaPods）
+        run: brew install ldid cocoapods
+
+      - name: 安装前端依赖
+        working-directory: agent-app
+        run: npm install
+
+      - name: 初始化 Tauri iOS 工程
+        working-directory: agent-app
+        run: npx tauri ios init
+
+      - name: 构建前端（dist）
+        working-directory: agent-app
+        run: npm run build
+
+      - name: 无签名编译 .app（xcodebuild）
+        run: |
+          set -e
+          PROJ=$(find agent-app/src-tauri/gen/apple -maxdepth 1 -name "*.xcodeproj" | head -1)
+          SCHEME=$(basename "$PROJ" .xcodeproj)
+          echo "Xcode 工程: $PROJ | Scheme: $SCHEME"
+          cd agent-app/src-tauri/gen/apple
+          xcodebuild \
+            -project "$(basename "$PROJ")" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+
+      - name: ldid 伪签名并打包 IPA
+        run: |
+          set -e
+          APP=$(find agent-app/src-tauri/gen/apple/build -name "*.app" -path "*Release-iphoneos*" | head -1)
+          echo "产物 .app: $APP"
+          APPNAME=$(basename "$APP" .app)
+          EXEC=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP/Info.plist")
+          echo "App 名: $APPNAME | 可执行文件: $EXEC"
+          rm -rf Payload
+          mkdir Payload
+          cp -r "$APP" "Payload/"
+          # TrollStore 伪签名（ad-hoc），无需苹果证书
+          ldid -S "Payload/$APPNAME.app/$EXEC"
+          zip -r FrapiAI_TrollStore.ipa Payload
+          ls -lh FrapiAI_TrollStore.ipa
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrapiAI_TrollStore_IPA
+          path: FrapiAI_TrollStore.ipa
+          retention-days: 30

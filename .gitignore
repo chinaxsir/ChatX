@@ -1,0 +1,44 @@
+# ===== 依赖与构建产物 =====
+node_modules/
+dist/
+dist-ssr/
+target/
+build/
+
+# ===== 本地工具链 / SDK（体积巨大，CI 自动安装）=====
+android-sdk/
+
+# ===== Tauri 移动端生成工程（CI 中由 tauri ios/android init 重新生成）=====
+agent-app/src-tauri/gen/
+
+# ===== 打包发布产物（不入库）=====
+agent-app/release-dist/
+agent-app/dist-release/
+*.msi
+*.msi.sig
+*.exe.sig
+*.zip
+*.exe
+*.apk
+*.ipa
+
+# ===== Tauri 更新签名私钥（泄露=任何人可发“官方更新”，绝对不能入库）=====
+*.key
+.tauri/
+*.sig
+
+# ===== Android 签名证书（敏感）=====
+*.jks
+*.keystore
+agent-app/android-keystore/
+
+# ===== Cloudflare / wrangler 本地缓存 =====
+update-server/.wrangler/
+update-server/_test_download.exe
+.dev.vars
+
+# ===== 日志与临时文件 =====
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
