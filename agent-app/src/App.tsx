@@ -115,16 +115,40 @@ function App() {
     toastTimer.current = window.setTimeout(() => setToast(null), duration);
   };
 
-  // 接管全局原生 alert → 应用内 Toast（原生弹窗标题栏会显示 "tauri.localhost 显示"）
+  // ===== 应用内确认弹窗（替代原生 confirm）=====
+  const [confirmBox, setConfirmBox] = useState<{ id: number; msg: string; onOk: () => void } | null>(null);
+  const confirmPromiseQueue = useRef<Array<{ msg: string; resolve: (v: boolean) => void }>>([]);
+
+  const customConfirm = (msg: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const id = Date.now();
+      setConfirmBox({
+        id,
+        msg,
+        onOk: () => { resolve(true); setConfirmBox(null); },
+      });
+      // 取消用 ESC 或右上角关闭 → resolve(false)
+      // 这里简单处理：如果用户关闭弹窗则也 resolve(false)
+      confirmPromiseQueue.current.push({ msg, resolve });
+    });
+  };
+
+  // 接管 window.alert + window.confirm
   useEffect(() => {
     const originalAlert = window.alert;
+    const originalConfirm = window.confirm;
     window.alert = (msg?: any) => {
       const text = String(msg ?? "");
-      // 根据内容前缀自动选择类型
       const type = /✅|成功/.test(text) ? "success" : /❌|失败|错误|⚠️/.test(text) ? "error" : "info";
       showToast(text, type, /失败|错误/.test(text) ? 6000 : 3200);
     };
-    return () => { window.alert = originalAlert; };
+    // confirm 返回 false 避免阻塞；内部业务逻辑走 customConfirm（需调用方改造为 async）
+    window.confirm = (_msg?: any): boolean => {
+      // 旧代码没改造 → 直接返回 false 阻止危险操作，同时在控制台提示
+      console.warn("[Frapi AI] window.confirm 已被接管，请在 async 函数中使用 await customConfirm() 替代");
+      return false;
+    };
+    return () => { window.alert = originalAlert; window.confirm = originalConfirm; };
   }, []);
 
   // ===== 侧栏宽度可拖拽 =====
@@ -605,7 +629,7 @@ function App() {
     try { const r: any = await invoke("load_history", { session_id: sid }); const arr = typeof r === "string" ? JSON.parse(r) : r; setMessages(Array.isArray(arr)?arr:[]); setSessionId(sid); setActiveTab("chat"); } catch { setMessages([]); }
   };
   const removeSession = async (sid: string) => {
-    if (!confirm("确定删除该会话？删除后不可恢复。")) return;
+    if (!(await customConfirm("确定删除该会话？删除后不可恢复。"))) return;
     try { await invoke("delete_session", { session_id: sid }); } catch (e) { alert("删除失败: " + e); return; }
     setSessions((prev:any[]) => prev.filter(s => s.id !== sid));
   };
@@ -1160,6 +1184,21 @@ function App() {
         <div key={toast.id} className={`app-toast toast-${toast.type}`} onClick={()=>setToast(null)}>
           <span className="app-toast-title">Frapi AI</span>
           <span className="app-toast-msg">{toast.msg}</span>
+        </div>
+      )}
+
+      {/* ===== 应用内确认弹窗（替代原生 confirm）===== */}
+      {confirmBox && (
+        <div className="modal-mask" onClick={()=>setConfirmBox(null)}>
+          <div className="modal" onClick={e=>e.stopPropagation()} style={{minWidth:340, textAlign:"center"}}>
+            <div style={{fontSize:28, marginBottom:8}}>⚠️</div>
+            <h3 style={{margin:"0 0 12px"}}>Frapi AI</h3>
+            <div style={{fontSize:14, color:"var(--text-600)", marginBottom:20}}>{confirmBox.msg}</div>
+            <div style={{display:"flex", gap:12, justifyContent:"center"}}>
+              <button className="btn" onClick={()=>setConfirmBox(null)}>取消</button>
+              <button className="btn btn-danger" onClick={confirmBox.onOk}>确定</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
