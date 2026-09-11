@@ -35,6 +35,7 @@ agent-app/android-keystore/
 
 # ===== Cloudflare / wrangler 本地缓存 =====
 update-server/.wrangler/
+.wrangler/
 update-server/_test_download.exe
 .dev.vars
 
