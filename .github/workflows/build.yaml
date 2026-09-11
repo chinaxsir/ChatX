@@ -43,7 +43,10 @@ jobs:
 
       - name: 无签名编译 .app（xcodebuild）
         env:
-          RUST_BACKTRACE: 1
+          RUST_BACKTRACE: full
+          # 禁用 Tauri Updater 和 Dev 环境特性
+          TAURI_SKIP_UPDATER: "true"
+          TAURI_NO_DEV_SERVER: "true"
         run: |
           set -e
           # 创建 Tauri mobile 模块所需的 server-addr 文件（否则 panic）
