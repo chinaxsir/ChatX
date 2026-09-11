@@ -1,0 +1,4 @@
+untrusted comment: signature from tauri secret key
+RUTrZDl7vOaDhrBgxbUKDBpDqxcIE1piboNmjlxs6MkO0EcEFBv+VdmsfLfQWrjxMNJ/TXOBNbFO7c4YehDsBhsl6ehiuhnUSgY=
+trusted comment: timestamp:1789003875	file:agent-app_0.3.0_x64-setup.exe
+2mnhfp2AmXdVMP7/u7Q3UvMw35Jm+NlkDHlUJcpujPvyAFBw3O+nYbJaJMdj1pCrdR9PidlJYoZKjHEkj6xDDw==

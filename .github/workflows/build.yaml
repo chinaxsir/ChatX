@@ -1,0 +1,96 @@
+name: Build All Platforms
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build-ios-trollstore:
+    name: 构建 iOS 巨魔 TrollStore IPA
+    runs-on: macos-15
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 安装 Rust iOS target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - name: 安装系统依赖（ldid 伪签名 / CocoaPods）
+        run: brew install ldid cocoapods
+
+      - name: 安装前端依赖
+        working-directory: agent-app
+        run: npm install
+
+      - name: 初始化 Tauri iOS 工程
+        working-directory: agent-app
+        run: npx tauri ios init
+
+      - name: 构建前端（dist）
+        working-directory: agent-app
+        run: npm run build
+
+      - name: 强制切换 Xcode 版本
+        run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
+
+      - name: 无签名编译 .app（xcodebuild）
+        env:
+          RUST_BACKTRACE: full
+          # 禁用 Tauri Updater 和 Dev 环境特性
+          TAURI_SKIP_UPDATER: "true"
+          TAURI_NO_DEV_SERVER: "true"
+        run: |
+          set -e
+          # 创建 Tauri mobile 模块所需的 server-addr 文件（否则 panic）
+          echo "http://localhost:1420" > "$TMPDIR/com.frapi.agent-app-server-addr"
+          PROJ=$(find agent-app/src-tauri/gen/apple -maxdepth 1 -name "*.xcodeproj" | head -1)
+          echo "Xcode 工程: $PROJ"
+          cd agent-app/src-tauri/gen/apple
+          # 列出所有可用 scheme 和配置（调试用）
+          xcodebuild -project "$(basename "$PROJ")" -list
+          # 自动检测 scheme
+          SCHEMES=$(xcodebuild -project "$(basename "$PROJ")" -list 2>&1 | sed -n '/Schemes:/,$p' | tail -n +2 | sed '/^$/d' | head -1 | xargs)
+          echo "使用 Scheme: $SCHEMES"
+          xcodebuild \
+            -project "$(basename "$PROJ")" \
+            -scheme "$SCHEMES" \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build
+
+      - name: ldid 伪签名并打包 IPA
+        run: |
+          set -e
+          # 同时搜索 Release 和 Debug 路径
+          APP=$(find agent-app/src-tauri/gen/apple/build -name "*.app" -path "*iphoneos*" | head -1)
+          echo "产物 .app: $APP"
+          APPNAME=$(basename "$APP" .app)
+          EXEC=$(/usr/libexec/PlistBuddy -c "Print CFBundleExecutable" "$APP/Info.plist")
+          echo "App 名: $APPNAME | 可执行文件: $EXEC"
+          rm -rf Payload
+          mkdir Payload
+          cp -r "$APP" "Payload/"
+          # TrollStore 伪签名（ad-hoc），无需苹果证书
+          ldid -S "Payload/$APPNAME.app/$EXEC"
+          zip -r FrapiAI_TrollStore.ipa Payload
+          ls -lh FrapiAI_TrollStore.ipa
+
+      - name: 上传 IPA 产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: FrapiAI_TrollStore_IPA
+          path: FrapiAI_TrollStore.ipa
+          retention-days: 30
