@@ -72,10 +72,23 @@ async function getLatestManifest(env, target, arch, currentVersion, request) {
     }
 
     // 返回 Tauri 标准 JSON
+    // 注意：pub_date 必须是标准 ISO 8601 格式（YYYY-MM-DDTHH:mm:ss.000Z），Tauri updater 严格解析
+    // D1 的 datetime('now') / datetime('now','localtime') 可能返回不同格式，在这里 normalize
+    let pubDate = latest.pub_date || '';
+    if (pubDate) {
+      // 替换空格为 T，去掉无格式后缀 → 追加 Z
+      pubDate = pubDate.trim();
+      if (!pubDate.includes('T')) pubDate = pubDate.replace(' ', 'T');
+      if (!/Z$/.test(pubDate) && !/[+-]\d{2}:\d{2}$/.test(pubDate)) {
+        pubDate = pubDate + 'Z';
+      }
+      // 强制补 .000Z 以匹配 Tauri 期望格式
+      pubDate = pubDate.replace(/Z$/, '.000Z');
+    }
     return jsonResponse({
       version: latest.version,
       notes: latest.notes || '',
-      pub_date: latest.pub_date,
+      pub_date: pubDate,
       platforms,
     });
   } catch (err) {
