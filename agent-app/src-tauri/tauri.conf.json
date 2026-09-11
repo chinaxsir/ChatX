@@ -41,7 +41,7 @@
       "endpoints": [
         "https://ibest.kdns.fr/app-updates/{{target}}/{{arch}}/{{current_version}}"
       ],
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDg2ODNFNkJDN0IzOTY0RUIKUldUclpEbDd2T2FEaG5zOW5CWEdGeGF1aWRHdlBtQzU4ckRoM0prdGFTM1dvUHVTbFVOL2YrNWMK"
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDJGQTBBMUMzQjQxM0I4M0UKUldRK3VCTzB3NkdnTDkxRWp3KzBvdXl2TFJtZ0poY1ZldU9hOERSSmJDL2NCM2hvZit5YkxRbTYK"
     }
   }
 }

@@ -560,37 +560,6 @@ fn list_sessions(app: AppHandle) -> String {
     serde_json::to_string(&sessions).unwrap_or_else(|_| "[]".to_string())
 }
 
-// ===== 批量上传消费明细（退出时调用，同步阻塞 5s 超时）=====
-// POST https://ibest.kdns.fr/client/usage (x-session-token) — 我们自己的分析后台
-#[tauri::command(rename_all = "snake_case")]
-async fn upload_usage_logs(app: AppHandle, session_token: String, usage_log_json: String) -> Result<String, String> {
-    let token = decrypt_str(&app, &session_token);
-    if token.is_empty() { return Ok("skip:no_token".to_string()); }
-    let logs: Vec<serde_json::Value> = serde_json::from_str(&usage_log_json).unwrap_or_default();
-    if logs.is_empty() { return Ok("skip:empty".to_string()); }
-
-    let url = "https://ibest.kdns.fr/client/usage";
-    println!("\n===== [Rust] 批量上传消费明细 {} 条 =====", logs.len());
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(5))
-        .build().map_err(|e| e.to_string())?;
-    let res = client.post(url)
-        .header("x-session-token", &token)
-        .header("Content-Type", "application/json")
-        .json(&serde_json::json!({ "logs": logs }))
-        .send().await;
-    match res {
-        Ok(r) => {
-            let status = r.status();
-            let body = r.text().await.unwrap_or_default();
-            println!("  状态: {} | 响应: {}", status, trunc(&body, 200));
-            if status.is_success() { Ok(format!("ok:{}", logs.len())) }
-            else { Err(format!("{}: {}", status, trunc(&body, 120))) }
-        }
-        Err(e) => { println!("  ❌ 上传失败（退出时网络不可用属正常）: {}", e); Err(e.to_string()) }
-    }
-}
-
 // ===== 应用重启（更新完成后调用）=====
 #[tauri::command]
 fn restart_app(app: AppHandle) {
@@ -756,40 +725,6 @@ fn register_screenshot_hotkey(hotkey: String) -> Result<(), String> {
 #[tauri::command]
 fn unregister_screenshot_hotkey() -> Result<(), String> { Ok(()) }
 
-// ===== 退出前 flush_and_quit：读 config.json → 上传 usage_log → 退出 =====
-fn flush_and_quit(app: &AppHandle) {
-    // 1. 读 config.json（加密字段无需再解密 —— session_token 解密后才能上传）
-    let mut path = app.path().app_data_dir().unwrap_or_else(|_| PathBuf::from("."));
-    path.push("config.json");
-    let (session_token, usage_log_json) = if path.exists() {
-        fs::read_to_string(&path).ok()
-            .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
-            .map(|v| {
-                let raw_st = v.get("session_token").and_then(|x| x.as_str()).unwrap_or("").to_string();
-                let st = decrypt_str(app, &raw_st); // 解密 session_token
-                let log_str = v.get("usage_log")
-                    .map(|u| serde_json::to_string(u).unwrap_or_else(|_| "[]".into()))
-                    .unwrap_or_else(|| "[]".into());
-                (st, log_str)
-            })
-            .unwrap_or_default()
-    } else { (String::new(), "[]".to_string()) };
-
-    // 2. 同步阻塞等上传完成（最多 5s；网络不通直接跳过）
-    if !session_token.is_empty() && usage_log_json != "[]" {
-        println!("\n[退出] 正在上传消费明细...");
-        let app_clone = app.clone();
-        let fut = async move {
-            let _ = upload_usage_logs(app_clone, session_token, usage_log_json).await;
-        };
-        tauri::async_runtime::block_on(fut);
-    }
-
-    // 3. 退出进程
-    println!("[退出] 正在退出...");
-    app.exit(0);
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -854,7 +789,7 @@ pub fn run() {
                                 if now_visible { let _ = w.hide(); } else { let _ = w.show(); let _ = w.set_focus(); }
                             }
                         }
-                        "tray-quit" => { flush_and_quit(handle); }
+                        "tray-quit" => { handle.exit(0); }
                         _ => {}
                     }
                 });
@@ -862,18 +797,11 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 关闭按钮 → 桌面端：最小化到托盘；移动端：上传后退出
+            // 关闭按钮 → 最小化到托盘（不退出进程）
             if let WindowEvent::CloseRequested { api, .. } = event {
                 #[cfg(desktop)]
                 {
                     let _ = window.hide();
-                    api.prevent_close();
-                }
-                #[cfg(not(desktop))]
-                {
-                    // 移动端：用户点关闭 → 上传后退出
-                    let app = window.app_handle().clone();
-                    std::thread::spawn(move || flush_and_quit(&app));
                     api.prevent_close();
                 }
             }
@@ -882,8 +810,7 @@ pub fn run() {
             login, fetch_api_keys, fetch_models, send_chat_request, send_chat_stream, stop_chat,
             save_config, load_config, save_history, load_history, list_sessions, delete_session,
             rename_session,
-            recharge, refresh_account, restart_app, register_screenshot_hotkey, unregister_screenshot_hotkey,
-            upload_usage_logs
+            recharge, refresh_account, restart_app, register_screenshot_hotkey, unregister_screenshot_hotkey
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

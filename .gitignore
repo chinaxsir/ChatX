@@ -22,8 +22,9 @@ agent-app/dist-release/
 *.apk
 *.ipa
 
-# ===== Tauri 更新签名私钥（泄露=任何人可发“官方更新”，绝对不能入库）=====
+# ===== Tauri 更新签名私钥（泄露=任何人可发"官方更新"，绝对不能入库）=====
 *.key
+frapi
 .tauri/
 *.sig
 
