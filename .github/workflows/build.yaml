@@ -41,16 +41,16 @@ jobs:
       - name: 强制切换 Xcode 版本
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
-      - name: 禁用 Rust 构建脚本（绕过 WebSocket panic）
+      - name: 彻底禁用 Rust 构建脚本（覆盖脚本文件）
         run: |
-          PBXPROJ=$(find agent-app/src-tauri -name "project.pbxproj" | head -1)
-          echo "找到工程文件: $PBXPROJ"
-          sed -i '' '/tauri ios xcode-script/c\echo "Skipping Tauri build script in CI"' "$PBXPROJ"
-
-      - name: 检查可用设备列表
-        working-directory: agent-app/src-tauri/gen/apple
-        run: |
-          xcodebuild -project agent-app.xcodeproj -scheme agent-app_iOS -showdestinations
+          find agent-app/src-tauri/gen/apple -name "Script-*.sh" | while read -r script; do
+            if grep -q "tauri ios xcode-script" "$script"; then
+              echo "已劫持脚本: $script"
+              echo "#!/bin/sh" > "$script"
+              echo "echo 'Tauri build script bypassed'" >> "$script"
+              chmod +x "$script"
+            fi
+          done
 
       - name: 编译 .app
         working-directory: agent-app/src-tauri/gen/apple
