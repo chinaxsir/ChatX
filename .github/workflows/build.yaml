@@ -41,15 +41,13 @@ jobs:
       - name: 强制切换 Xcode 版本
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
-      - name: 彻底移除 Tauri 构建脚本 Phase
+      - name: 彻底移除 Xcode 构建 Phase
         run: |
-          # 查找所有脚本文件，并删除包含 tauri 构建指令的文件
-          find agent-app/src-tauri/gen/apple -name "Script-*.sh" | while read -r script; do
-            if grep -q "tauri ios xcode-script" "$script"; then
-              echo "删除脚本: $script"
-              rm -f "$script"
-            fi
-          done
+          PBXPROJ=$(find agent-app/src-tauri -name "project.pbxproj" | head -1)
+          echo "正在处理工程文件: $PBXPROJ"
+          # 彻底移除包含 "Build Rust Code" 的 ShellScriptBuildPhase 块
+          sed -i '' '/Build Rust Code/,/};/d' "$PBXPROJ"
+          echo "Xcode 构建 Phase 已物理移除"
 
       - name: 编译 .app
         working-directory: agent-app/src-tauri/gen/apple
@@ -57,7 +55,6 @@ jobs:
           RUST_BACKTRACE: full
         run: |
           set -e
-          # 增加 -skipUnavailableActions 尝试绕过未配置的 scheme 错误
           xcodebuild build \
             -project agent-app.xcodeproj \
             -scheme agent-app_iOS \
