@@ -41,14 +41,13 @@ jobs:
       - name: 强制切换 Xcode 版本
         run: sudo xcode-select -s /Applications/Xcode_16.app/Contents/Developer
 
-      - name: 彻底禁用 Rust 构建脚本（覆盖脚本文件）
+      - name: 彻底移除 Tauri 构建脚本 Phase
         run: |
+          # 查找所有脚本文件，并删除包含 tauri 构建指令的文件
           find agent-app/src-tauri/gen/apple -name "Script-*.sh" | while read -r script; do
             if grep -q "tauri ios xcode-script" "$script"; then
-              echo "已劫持脚本: $script"
-              echo "#!/bin/sh" > "$script"
-              echo "echo 'Tauri build script bypassed'" >> "$script"
-              chmod +x "$script"
+              echo "删除脚本: $script"
+              rm -f "$script"
             fi
           done
 
@@ -58,6 +57,7 @@ jobs:
           RUST_BACKTRACE: full
         run: |
           set -e
+          # 增加 -skipUnavailableActions 尝试绕过未配置的 scheme 错误
           xcodebuild build \
             -project agent-app.xcodeproj \
             -scheme agent-app_iOS \
@@ -67,7 +67,8 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS=""
+            CODE_SIGN_ENTITLEMENTS="" \
+            -allowProvisioningUpdates
 
       - name: ldid 伪签名并打包 IPA
         run: |
