@@ -47,6 +47,11 @@ jobs:
           echo "找到工程文件: $PBXPROJ"
           sed -i '' '/tauri ios xcode-script/c\echo "Skipping Tauri build script in CI"' "$PBXPROJ"
 
+      - name: 检查可用设备列表
+        working-directory: agent-app/src-tauri/gen/apple
+        run: |
+          xcodebuild -project agent-app.xcodeproj -scheme agent-app_iOS -showdestinations
+
       - name: 编译 .app
         working-directory: agent-app/src-tauri/gen/apple
         env:
